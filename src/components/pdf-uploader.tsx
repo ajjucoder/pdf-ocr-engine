@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { FileText, Upload, CheckCircle, AlertCircle, Download, Loader2 } from "lucide-react"
 
-type UploadState = "idle" | "uploading" | "processing" | "downloading" | "complete" | "error"
+type UploadState = "idle" | "uploading" | "processing" | "ready" | "downloaded" | "error"
 
 const FETCH_TIMEOUT_MS = 300000 // 5 minutes for OCR processing
 
@@ -16,6 +16,8 @@ export function PdfUploader() {
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [convertedBlob, setConvertedBlob] = useState<Blob | null>(null)
+  const [convertedFilename, setConvertedFilename] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -153,7 +155,6 @@ export function PdfUploader() {
         throw new Error("Server returned an invalid response")
       }
 
-      setState("downloading")
       setProgress(90)
 
       // Get blob with timeout protection
@@ -176,15 +177,12 @@ export function PdfUploader() {
         }
       }
 
-      // Trigger the download
-      const downloadSuccess = triggerDownload(blob, filename)
-      
-      if (!downloadSuccess) {
-        throw new Error("Failed to initiate download")
-      }
+      // Store the blob and filename for download
+      setConvertedBlob(blob)
+      setConvertedFilename(filename)
 
       setProgress(100)
-      setState("complete")
+      setState("ready")
     } catch (err) {
       if (progressInterval) {
         clearInterval(progressInterval)
@@ -217,9 +215,20 @@ export function PdfUploader() {
     setState("idle")
     setProgress(0)
     setError(null)
+    setConvertedBlob(null)
+    setConvertedFilename(null)
   }
 
-  const isProcessing = state === "uploading" || state === "processing" || state === "downloading"
+  const handleDownload = useCallback(() => {
+    if (!convertedBlob || !convertedFilename) return
+    
+    const success = triggerDownload(convertedBlob, convertedFilename)
+    if (success) {
+      setState("downloaded")
+    }
+  }, [convertedBlob, convertedFilename, triggerDownload])
+
+  const isProcessing = state === "uploading" || state === "processing"
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -275,16 +284,24 @@ export function PdfUploader() {
               <Loader2 className="w-4 h-4 animate-spin" />
               {state === "uploading" && "Uploading..."}
               {state === "processing" && "Processing with OCR... This may take a few minutes."}
-              {state === "downloading" && "Preparing download..."}
             </p>
           </div>
         )}
 
-        {state === "complete" && (
+        {state === "ready" && (
           <div className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
             <p className="text-green-600 dark:text-green-400 font-medium flex items-center justify-center gap-2">
               <CheckCircle className="w-5 h-5" />
-              Conversion complete! Your file has been downloaded.
+              Conversion complete! Click the button below to download.
+            </p>
+          </div>
+        )}
+
+        {state === "downloaded" && (
+          <div className="text-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+            <p className="text-green-600 dark:text-green-400 font-medium flex items-center justify-center gap-2">
+              <CheckCircle className="w-5 h-5" />
+              File downloaded successfully.
             </p>
           </div>
         )}
@@ -310,7 +327,19 @@ export function PdfUploader() {
               Cancel
             </Button>
           )}
-          {(state === "complete" || state === "error") && (
+          {state === "ready" && convertedBlob && convertedFilename && (
+            <Button onClick={handleDownload} size="lg">
+              <Download className="w-4 h-4 mr-2" />
+              Click to download
+            </Button>
+          )}
+          {state === "downloaded" && convertedBlob && convertedFilename && (
+            <Button onClick={handleDownload} size="lg" variant="secondary">
+              <Download className="w-4 h-4 mr-2" />
+              Download again
+            </Button>
+          )}
+          {(state === "ready" || state === "downloaded" || state === "error") && (
             <Button onClick={handleReset} variant="outline" size="lg">
               Convert Another PDF
             </Button>
