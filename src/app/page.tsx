@@ -1,4 +1,5 @@
 import { PdfUploader } from "@/components/pdf-uploader"
+import { Upload, FileSearch, Download } from "lucide-react"
 
 export default function Home() {
   return (
@@ -20,21 +21,30 @@ export default function Home() {
           <h2 className="text-2xl font-semibold">How it works</h2>
           <div className="grid md:grid-cols-3 gap-6 text-left">
             <div className="p-6 rounded-lg bg-card border">
-              <div className="text-3xl mb-3">1️⃣</div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">1</span>
+                <Upload className="w-6 h-6 text-muted-foreground" />
+              </div>
               <h3 className="font-semibold mb-2">Upload PDF</h3>
               <p className="text-sm text-muted-foreground">
                 Drop your scanned PDF that contains images instead of text.
               </p>
             </div>
             <div className="p-6 rounded-lg bg-card border">
-              <div className="text-3xl mb-3">2️⃣</div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">2</span>
+                <FileSearch className="w-6 h-6 text-muted-foreground" />
+              </div>
               <h3 className="font-semibold mb-2">OCR Processing</h3>
               <p className="text-sm text-muted-foreground">
                 Tesseract.js extracts text from each page using advanced OCR.
               </p>
             </div>
             <div className="p-6 rounded-lg bg-card border">
-              <div className="text-3xl mb-3">3️⃣</div>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold">3</span>
+                <Download className="w-6 h-6 text-muted-foreground" />
+              </div>
               <h3 className="font-semibold mb-2">Download Result</h3>
               <p className="text-sm text-muted-foreground">
                 Get a searchable PDF that looks identical but has selectable text.
