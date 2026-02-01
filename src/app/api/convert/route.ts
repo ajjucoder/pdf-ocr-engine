@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { fromBuffer } from "pdf2pic"
 import { convertPdfToSearchable } from "@/lib/ocr"
+import { pdf } from "pdf-to-img"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -26,26 +26,20 @@ export async function POST(request: NextRequest) {
     }
 
     const pdfBuffer = Buffer.from(await file.arrayBuffer())
-
-    const options = {
-      density: 300,
-      format: "png" as const,
-      width: 2480,
-      height: 3508,
-    }
-
-    const convert = fromBuffer(pdfBuffer, options)
     
-    const { PDFDocument } = await import("pdf-lib")
-    const pdfDoc = await PDFDocument.load(pdfBuffer)
-    const pageCount = pdfDoc.getPageCount()
-
+    // Convert PDF pages to images using pdf-to-img
     const imageBuffers: Buffer[] = []
-    for (let i = 1; i <= pageCount; i++) {
-      const result = await convert(i, { responseType: "buffer" })
-      if (result.buffer) {
-        imageBuffers.push(result.buffer as Buffer)
-      }
+    const pdfDocument = await pdf(pdfBuffer, { scale: 2.0 })
+    
+    for await (const page of pdfDocument) {
+      imageBuffers.push(page)
+    }
+    
+    if (imageBuffers.length === 0) {
+      return NextResponse.json(
+        { error: "Could not extract pages from PDF" },
+        { status: 500 }
+      )
     }
 
     const conversionResult = await convertPdfToSearchable(
@@ -61,7 +55,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Convert Buffer to Uint8Array for Response
     const uint8Array = new Uint8Array(conversionResult.outputBuffer)
     
     return new NextResponse(uint8Array, {
