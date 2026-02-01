@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PDF OCR Engine
+
+Convert image-only PDFs (scanned documents) to searchable PDFs with selectable text using OCR.
+
+## Features
+
+- **Next.js 16** with App Router and Turbopack
+- **Tesseract.js** for local OCR processing (no API keys needed)
+- **pdf-lib** for PDF manipulation
+- **shadcn/ui** for beautiful, accessible UI components
+- **TypeScript** for type safety
+
+## How It Works
+
+1. **Upload** - Drop your scanned PDF that contains images instead of text
+2. **OCR Processing** - Tesseract.js extracts text from each page
+3. **Download** - Get a searchable PDF that looks identical but has selectable text
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Clone the repo
+git clone https://github.com/ajjucoder/pdf-ocr-engine.git
+cd pdf-ocr-engine
+
+# Install dependencies
+npm install
+
+# Run dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to use the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- [Next.js 16](https://nextjs.org/) - React framework
+- [Tesseract.js](https://tesseract.projectnaptha.com/) - Pure JavaScript OCR
+- [pdf-lib](https://pdf-lib.js.org/) - PDF manipulation
+- [pdf2pic](https://github.com/yakovmeister/pdf2pic) - PDF to image conversion
+- [shadcn/ui](https://ui.shadcn.com/) - UI components
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
 
-## Learn More
+## Core OCR Engine
 
-To learn more about Next.js, take a look at the following resources:
+The OCR engine is modular and can be used independently:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```typescript
+import { convertPdfToSearchable } from "@/lib/ocr"
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+const result = await convertPdfToSearchable(pdfBuffer, imageBuffers, {
+  language: "eng",
+  preserveImages: true,
+})
+```
 
-## Deploy on Vercel
+## API Route
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+POST to `/api/convert` with a FormData containing:
+- `pdf` - The PDF file
+- `language` - OCR language (default: "eng")
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Returns the searchable PDF as a download.
+
+## Future Improvements
+
+- [ ] MCP server for Claude/OpenCode integration
+- [ ] Multi-language OCR support
+- [ ] Progress streaming via Server-Sent Events
+- [ ] Batch processing for multiple PDFs
+- [ ] Cloud OCR fallback for better accuracy
+
+## License
+
+MIT
