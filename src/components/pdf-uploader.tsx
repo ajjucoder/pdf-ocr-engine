@@ -69,11 +69,13 @@ export function PdfUploader() {
       // Use a timeout to ensure the link is in the DOM before clicking
       setTimeout(() => {
         a.click()
-        // Clean up after download starts
+        // Clean up after download completes - use a longer timeout to ensure
+        // the browser has fully processed the download before revoking the URL.
+        // 100ms was too short and caused downloads to hang at 100%.
         setTimeout(() => {
           document.body.removeChild(a)
           URL.revokeObjectURL(url)
-        }, 100)
+        }, 60000)
       }, 0)
       
       return true
