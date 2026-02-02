@@ -34,10 +34,13 @@ export async function buildSearchablePdf(
     // Add invisible text layer
     for (const word of pageResult.words) {
       const x = word.bbox.x0 * scaleX
-      // PDF coordinates are from bottom, image coords from top
-      const y = height - (word.bbox.y1 * scaleY)
       const wordWidth = (word.bbox.x1 - word.bbox.x0) * scaleX
       const wordHeight = (word.bbox.y1 - word.bbox.y0) * scaleY
+      
+      // PDF coordinates are from bottom, image coords from top
+      // Add baseline offset (PDF drawText uses baseline, not bbox bottom)
+      const baselineOffset = wordHeight * 0.2
+      const y = height - (word.bbox.y1 * scaleY) + baselineOffset
 
       // Calculate font size to fit the word in the bounding box
       const textWidth = font.widthOfTextAtSize(word.text, 12)
@@ -84,9 +87,13 @@ export async function createTextOnlyPdf(
     // Add visible text
     for (const word of pageResult.words) {
       const x = word.bbox.x0
-      const y = height - word.bbox.y1
       const wordWidth = word.bbox.x1 - word.bbox.x0
       const wordHeight = word.bbox.y1 - word.bbox.y0
+      
+      // PDF coordinates are from bottom, image coords from top
+      // Add baseline offset (PDF drawText uses baseline, not bbox bottom)
+      const baselineOffset = wordHeight * 0.2
+      const y = height - word.bbox.y1 + baselineOffset
 
       const textWidth = font.widthOfTextAtSize(word.text, 12)
       
