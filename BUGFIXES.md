@@ -1,5 +1,116 @@
 # Bug Fixes Log
 
+## February 2, 2026 (Part 3) - Tesseract.js v7 API Compatibility Fix
+
+### Issue Summary
+OCR was producing PDFs with text, but the text was **not properly positioned** and **content was incorrect**. The OCR appeared to work (files were generated) but:
+1. Text was not in the correct positions (misaligned from visible content)
+2. Copied text didn't match the visible document content
+
+### Root Cause Analysis
+**Tesseract.js v7 Breaking API Change (src/lib/ocr/ocr.ts)**
+
+Tesseract.js v6+ introduced a breaking change where:
+1. **All output formats except `text` are disabled by default**
+2. **Word bounding boxes moved to a nested structure**
+
+The code was:
+```typescript
+// OLD CODE (BROKEN)
+const result = await worker.recognize(imageBuffer)  // Missing options!
+const words = result.data.words  // This path doesn't exist in v7!
+```
+
+**Problems:**
+- `blocks` output was not enabled → `result.data.blocks` was `null`
+- Code looked for `result.data.words` which doesn't exist in v7
+- Result: 0 words extracted, empty word array, no bounding boxes
+
+**Tesseract.js v7 Structure:**
+```
+result.data.blocks[]          ← MUST enable with { blocks: true }
+  └── paragraphs[]
+      └── lines[]
+          └── words[]         ← Words are nested here, not at result.data.words
+              └── { text, bbox, confidence }
+```
+
+### Investigation Process
+**Systematic debugging:**
+1. Created diagnostic script to trace data flow
+2. Discovered OCR text was recognized but `words` array was empty
+3. Examined Tesseract.js result structure - `blocks: null`
+4. Read Tesseract.js v7 README - confirmed API change
+5. Tested with `{ blocks: true }` option - words now extracted
+
+### Fix Applied
+
+#### src/lib/ocr/ocr.ts
+
+**Added:** TypeScript interfaces for Tesseract v7 structure
+```typescript
+interface TesseractWord {
+  text: string
+  confidence: number
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+}
+
+interface TesseractLine { words: TesseractWord[] }
+interface TesseractParagraph { lines: TesseractLine[] }
+interface TesseractBlock { paragraphs: TesseractParagraph[] }
+```
+
+**Added:** Helper function to extract words from nested blocks
+```typescript
+function extractWordsFromBlocks(blocks: TesseractBlock[] | null): TesseractWord[] {
+  if (!blocks) return []
+  const words: TesseractWord[] = []
+  for (const block of blocks) {
+    for (const para of block.paragraphs) {
+      for (const line of para.lines) {
+        for (const word of line.words) {
+          words.push(word)
+        }
+      }
+    }
+  }
+  return words
+}
+```
+
+**Modified:** `ocrImage()` and `ocrImageWithProgress()` functions
+```typescript
+// OLD (BROKEN)
+const result = await worker.recognize(imageBuffer)
+const words = result.data.words  // undefined!
+
+// NEW (FIXED)
+const result = await worker.recognize(imageBuffer, {}, { blocks: true })
+const blocks = result.data.blocks as TesseractBlock[] | null
+const extractedWords = extractWordsFromBlocks(blocks)
+```
+
+### Testing Results
+**Before Fix:**
+- `result.data.words` → `undefined`
+- `result.data.blocks` → `null`
+- Words extracted: 0
+- PDF text layer: empty
+
+**After Fix:**
+- `result.data.blocks` → contains word data
+- Words extracted: 201 (for test page)
+- PDF text layer: correctly populated with bounding boxes
+- Text extraction with `pdftotext`: ✅ works correctly
+
+### Files Modified
+1. `src/lib/ocr/ocr.ts` - Updated for Tesseract.js v7 API
+
+### Impact
+**CRITICAL** - This was the root cause of the OCR not producing correctly positioned, accurate text in output PDFs.
+
+---
+
 ## February 2, 2026 (Part 2) - Text Baseline Positioning Fix
 
 ### Issue Summary

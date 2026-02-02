@@ -2,6 +2,42 @@ import Tesseract from "tesseract.js"
 import sharp from "sharp"
 import type { OcrResult, PageResult } from "./types"
 
+interface TesseractWord {
+  text: string
+  confidence: number
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+}
+
+interface TesseractLine {
+  words: TesseractWord[]
+}
+
+interface TesseractParagraph {
+  lines: TesseractLine[]
+}
+
+interface TesseractBlock {
+  paragraphs: TesseractParagraph[]
+}
+
+function extractWordsFromBlocks(blocks: TesseractBlock[] | null): TesseractWord[] {
+  if (!blocks) return []
+  const words: TesseractWord[] = []
+  for (const block of blocks) {
+    if (!block.paragraphs) continue
+    for (const para of block.paragraphs) {
+      if (!para.lines) continue
+      for (const line of para.lines) {
+        if (!line.words) continue
+        for (const word of line.words) {
+          words.push(word)
+        }
+      }
+    }
+  }
+  return words
+}
+
 // Singleton worker instance - created once, reused for all pages
 let worker: Tesseract.Worker | null = null
 let workerLanguage: string | null = null
@@ -51,21 +87,18 @@ export async function ocrImage(
   console.log(`[OCR] Page ${pageNumber} dimensions: ${imageWidth}x${imageHeight}`)
   
   const tesseractWorker = await getWorker(language)
-  const result = await tesseractWorker.recognize(imageBuffer)
-  
+  // Enable blocks output to get word-level bounding boxes (required in Tesseract.js v6+)
+  const result = await tesseractWorker.recognize(imageBuffer, {}, { blocks: true })
+
   console.timeEnd(`[OCR] Page ${pageNumber} recognition`)
-  
-  // Access words from the result data
-  const data = result.data as {
-    text: string
-    words?: Array<{
-      text: string
-      confidence: number
-      bbox: { x0: number; y0: number; x1: number; y1: number }
-    }>
-  }
-  
-  const words: OcrResult[] = (data.words || []).map((word) => ({
+
+  // Extract words from blocks structure (Tesseract.js v6+ structure)
+  const blocks = result.data.blocks as TesseractBlock[] | null
+  const extractedWords = extractWordsFromBlocks(blocks)
+
+  console.log(`[OCR] Page ${pageNumber}: Found ${extractedWords.length} words`)
+
+  const words: OcrResult[] = extractedWords.map((word) => ({
     text: word.text,
     confidence: word.confidence,
     bbox: {
@@ -81,7 +114,7 @@ export async function ocrImage(
     width: imageWidth,
     height: imageHeight,
     words,
-    fullText: data.text,
+    fullText: result.data.text,
   }
 }
 
@@ -104,27 +137,24 @@ export async function ocrImageWithProgress(
   
   // Use shared worker for performance - no more per-page worker creation!
   const tesseractWorker = await getWorker(language)
-  
-  const result = await tesseractWorker.recognize(imageBuffer)
-  
+
+  // Enable blocks output to get word-level bounding boxes (required in Tesseract.js v6+)
+  const result = await tesseractWorker.recognize(imageBuffer, {}, { blocks: true })
+
   // Call progress callback at completion if provided
   if (onProgress) {
     onProgress(1.0)
   }
-  
+
   console.timeEnd(`[OCR] Page ${pageNumber} recognition`)
-  
-  // Access words from the result data with proper typing
-  const data = result.data as {
-    text: string
-    words?: Array<{
-      text: string
-      confidence: number
-      bbox: { x0: number; y0: number; x1: number; y1: number }
-    }>
-  }
-  
-  const words: OcrResult[] = (data.words || []).map((word) => ({
+
+  // Extract words from blocks structure (Tesseract.js v6+ structure)
+  const blocks = result.data.blocks as TesseractBlock[] | null
+  const extractedWords = extractWordsFromBlocks(blocks)
+
+  console.log(`[OCR] Page ${pageNumber}: Found ${extractedWords.length} words`)
+
+  const words: OcrResult[] = extractedWords.map((word) => ({
     text: word.text,
     confidence: word.confidence,
     bbox: {
@@ -140,7 +170,7 @@ export async function ocrImageWithProgress(
     width: imageWidth,
     height: imageHeight,
     words,
-    fullText: data.text,
+    fullText: result.data.text,
   }
 }
 
