@@ -1,5 +1,4 @@
 import { PDFDocument } from "pdf-lib"
-import sharp from "sharp"
 
 export interface ExtractedPage {
   pageNumber: number

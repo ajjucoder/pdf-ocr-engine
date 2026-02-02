@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { convertPdfToSearchable } from "@/lib/ocr"
-import { pdf } from "pdf-to-img"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -34,8 +33,10 @@ export async function POST(request: NextRequest) {
     console.timeEnd("[STEP 1] Read PDF buffer")
     
     // Convert PDF pages to images using pdf-to-img
+    // Dynamic import to avoid build-time initialization issues
     // OPTIMIZED: Reduced scale from 2.0 to 1.5 for faster processing
     console.time("[STEP 2] PDF to images")
+    const { pdf } = await import("pdf-to-img")
     const imageBuffers: Buffer[] = []
     const pdfDocument = await pdf(pdfBuffer, { scale: 1.5 })
     

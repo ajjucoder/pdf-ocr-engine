@@ -1,4 +1,5 @@
 import Tesseract from "tesseract.js"
+import sharp from "sharp"
 import type { OcrResult, PageResult } from "./types"
 
 // Singleton worker instance - created once, reused for all pages
@@ -42,6 +43,13 @@ export async function ocrImage(
 ): Promise<PageResult> {
   console.time(`[OCR] Page ${pageNumber} recognition`)
   
+  // Get actual image dimensions using sharp
+  const metadata = await sharp(imageBuffer).metadata()
+  const imageWidth = metadata.width ?? 1
+  const imageHeight = metadata.height ?? 1
+  
+  console.log(`[OCR] Page ${pageNumber} dimensions: ${imageWidth}x${imageHeight}`)
+  
   const tesseractWorker = await getWorker(language)
   const result = await tesseractWorker.recognize(imageBuffer)
   
@@ -70,8 +78,8 @@ export async function ocrImage(
 
   return {
     pageNumber,
-    width: 0,
-    height: 0,
+    width: imageWidth,
+    height: imageHeight,
     words,
     fullText: data.text,
   }
@@ -88,6 +96,11 @@ export async function ocrImageWithProgress(
   onProgress?: (progress: number) => void
 ): Promise<PageResult> {
   console.time(`[OCR] Page ${pageNumber} recognition`)
+  
+  // Get actual image dimensions using sharp
+  const metadata = await sharp(imageBuffer).metadata()
+  const imageWidth = metadata.width ?? 1
+  const imageHeight = metadata.height ?? 1
   
   // Use shared worker for performance - no more per-page worker creation!
   const tesseractWorker = await getWorker(language)
@@ -124,8 +137,8 @@ export async function ocrImageWithProgress(
 
   return {
     pageNumber,
-    width: 0,
-    height: 0,
+    width: imageWidth,
+    height: imageHeight,
     words,
     fullText: data.text,
   }

@@ -22,7 +22,12 @@ export async function buildSearchablePdf(
     const pageResult = pageResults.find(p => p.pageNumber === i + 1)
     if (!pageResult) continue
 
-    // Calculate scale factors
+    // Calculate scale factors - skip if dimensions are invalid
+    if (pageResult.width <= 0 || pageResult.height <= 0) {
+      console.warn(`[BUILD] Page ${i + 1}: Invalid OCR dimensions (${pageResult.width}x${pageResult.height}), skipping text layer`)
+      continue
+    }
+
     const scaleX = width / pageResult.width
     const scaleY = height / pageResult.height
 
@@ -36,6 +41,10 @@ export async function buildSearchablePdf(
 
       // Calculate font size to fit the word in the bounding box
       const textWidth = font.widthOfTextAtSize(word.text, 12)
+      
+      // Skip if text produces zero-width measurement
+      if (textWidth <= 0 || wordWidth <= 0 || wordHeight <= 0) continue
+      
       const fontSize = Math.min(
         (wordWidth / textWidth) * 12,
         wordHeight * 0.9
@@ -65,7 +74,11 @@ export async function createTextOnlyPdf(
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
 
   for (const pageResult of pageResults) {
-    const page = pdfDoc.addPage([pageResult.width, pageResult.height])
+    // Use default page size if dimensions are invalid
+    const pageWidth = pageResult.width > 0 ? pageResult.width : 612
+    const pageHeight = pageResult.height > 0 ? pageResult.height : 792
+    
+    const page = pdfDoc.addPage([pageWidth, pageHeight])
     const { height } = page.getSize()
 
     // Add visible text
@@ -76,6 +89,10 @@ export async function createTextOnlyPdf(
       const wordHeight = word.bbox.y1 - word.bbox.y0
 
       const textWidth = font.widthOfTextAtSize(word.text, 12)
+      
+      // Skip if text produces zero-width measurement
+      if (textWidth <= 0 || wordWidth <= 0 || wordHeight <= 0) continue
+      
       const fontSize = Math.min(
         (wordWidth / textWidth) * 12,
         wordHeight * 0.9
