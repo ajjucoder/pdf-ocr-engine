@@ -79,6 +79,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --fd-font-editorial-display: "Didot", "Bodoni MT", "Times New Roman", serif;
+  --fd-font-editorial-body: "Book Antiqua", "Palatino Linotype", "Georgia", serif;
+  --fd-font-industrial: "Impact", "Franklin Gothic Heavy", "Arial Narrow Bold", sans-serif;
+  --fd-font-body-sans: "Trebuchet MS", "Gill Sans", "Tahoma", sans-serif;
+  --fd-font-futuristic: "Eurostile", "Bank Gothic", "Century Gothic", sans-serif;
+  --fd-font-terminal: "JetBrains Mono", "Lucida Console", "Courier New", monospace;
+  --fd-font-friendly: "Cooper Black", "Rockwell", "Georgia", serif;
 }
 
 .dark {
@@ -122,4 +129,155 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@keyframes fd-page-enter-keyframe {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fd-float-a {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-12px) translateX(10px) rotate(2deg);
+  }
+}
+
+@keyframes fd-float-b {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(10px) translateX(-8px) rotate(-3deg);
+  }
+}
+
+@keyframes fd-float-c {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) translateX(-6px) rotate(1deg);
+  }
+}
+
+.fd-page-enter {
+  animation: fd-page-enter-keyframe 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fd-float-slow {
+  animation: fd-float-a 9s ease-in-out infinite;
+}
+
+.fd-float-mid {
+  animation: fd-float-b 7.6s ease-in-out infinite;
+}
+
+.fd-float-fast {
+  animation: fd-float-c 5.8s ease-in-out infinite;
+}
+
+.fd-font-editorial-display {
+  font-family: var(--fd-font-editorial-display);
+}
+
+.fd-font-editorial-body {
+  font-family: var(--fd-font-editorial-body);
+}
+
+.fd-font-industrial {
+  font-family: var(--fd-font-industrial);
+}
+
+.fd-font-body-sans {
+  font-family: var(--fd-font-body-sans);
+}
+
+.fd-font-futuristic {
+  font-family: var(--fd-font-futuristic);
+}
+
+.fd-font-terminal {
+  font-family: var(--fd-font-terminal);
+}
+
+.fd-font-friendly {
+  font-family: var(--fd-font-friendly);
+}
+
+.fd-editorial-texture {
+  background-image:
+    linear-gradient(120deg, rgba(92, 77, 59, 0.06) 0%, rgba(92, 77, 59, 0.02) 28%, rgba(92, 77, 59, 0.08) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(99, 82, 62, 0.045) 0,
+      rgba(99, 82, 62, 0.045) 1px,
+      transparent 1px,
+      transparent 18px
+    );
+}
+
+.fd-grid-hatch {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.fd-aurora-bg {
+  background:
+    radial-gradient(1200px circle at 12% 12%, rgba(73, 252, 212, 0.2), transparent 55%),
+    radial-gradient(900px circle at 92% 10%, rgba(94, 122, 255, 0.24), transparent 58%),
+    radial-gradient(680px circle at 55% 88%, rgba(255, 92, 140, 0.2), transparent 62%),
+    linear-gradient(155deg, #0a1821 0%, #08121c 48%, #06101a 100%);
+}
+
+.fd-glass-card {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08)
+  );
+  box-shadow: 0 20px 80px rgba(1, 12, 24, 0.45);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  backdrop-filter: blur(16px);
+}
+
+.fd-terminal-grid {
+  background-image:
+    linear-gradient(rgba(15, 70, 35, 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 70, 35, 0.45) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+.fd-bento-sunburst {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 220, 173, 0.7) 0%, transparent 40%),
+    radial-gradient(circle at 85% 20%, rgba(255, 175, 120, 0.52) 0%, transparent 35%),
+    linear-gradient(180deg, rgba(255, 241, 220, 0.75), rgba(255, 232, 198, 0.52));
+}
+
+.fd-bento-card {
+  border: 1px solid rgba(148, 89, 34, 0.2);
+  border-radius: 1.1rem;
+  padding: 1rem;
+  background: rgba(255, 247, 234, 0.9);
+  box-shadow: 0 10px 35px rgba(172, 110, 52, 0.15);
+}
+
+.fd-bento-card-alt {
+  background: rgba(255, 219, 177, 0.88);
 }
