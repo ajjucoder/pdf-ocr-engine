@@ -33,6 +33,7 @@ export async function convertPdfToSearchable(
   const { language = "eng", preserveImages = true, maxPages } = options
   const pageResults: PageResult[] = []
   let totalPages = 0
+  let expectedOcrPages = 0
   let session: Awaited<ReturnType<typeof createOcrSession>> | null = null
   let ocrTimerStarted = false
 
@@ -50,8 +51,12 @@ export async function convertPdfToSearchable(
         `PDF has ${totalPages} pages, which exceeds the maximum allowed ${maxPages} pages`
       )
     }
+    expectedOcrPages = pdfInfo.pages.filter((page) => page.hasText !== true).length
 
     console.log(`[OCR] Processing ${totalPages} pages`)
+    console.log(
+      `[OCR] Skipping OCR on ${totalPages - expectedOcrPages} page(s) with existing selectable text`
+    )
 
     if (onProgress) {
       onProgress({
@@ -61,10 +66,6 @@ export async function convertPdfToSearchable(
         percentage: 0,
       })
     }
-
-    console.time("[OCR] Worker initialization")
-    session = await createOcrSession(language)
-    console.timeEnd("[OCR] Worker initialization")
 
     let processedPages = 0
     for await (const rawImageBuffer of toAsyncPageImageIterator(imageSource)) {
@@ -83,13 +84,37 @@ export async function convertPdfToSearchable(
         })
       }
 
+      const pageInfo = pdfInfo.pages[currentPage - 1]
+      if (!pageInfo) {
+        throw new Error(
+          `Page extraction mismatch: extracted ${processedPages} pages for a ${totalPages}-page PDF`
+        )
+      }
+
+      if (pageInfo.hasText) {
+        console.log(`[OCR] Page ${currentPage}: skipping OCR (existing selectable text found)`)
+        continue
+      }
+
+      if (!session) {
+        console.time("[OCR] Worker initialization")
+        session = await createOcrSession(language)
+        console.timeEnd("[OCR] Worker initialization")
+      }
+
       const result = await session.ocrImage(imageBuffer, currentPage)
       pageResults.push(result)
     }
 
-    if (pageResults.length !== totalPages) {
+    if (processedPages !== totalPages) {
       throw new Error(
-        `Page extraction mismatch: OCR processed ${pageResults.length} of ${totalPages} page(s)`
+        `Page extraction mismatch: OCR received ${processedPages} of ${totalPages} page(s)`
+      )
+    }
+
+    if (pageResults.length !== expectedOcrPages) {
+      throw new Error(
+        `Page extraction mismatch: OCR processed ${pageResults.length} of ${expectedOcrPages} expected OCR page(s)`
       )
     }
     

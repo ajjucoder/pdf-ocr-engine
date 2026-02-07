@@ -39,7 +39,10 @@ describe("convertPdfToSearchable", () => {
   it("processes async page images and builds output PDF", async () => {
     mockedGetPdfInfo.mockResolvedValue({
       pageCount: 2,
-      pages: [{ width: 612, height: 792 }, { width: 612, height: 792 }],
+      pages: [
+        { width: 612, height: 792, hasText: false },
+        { width: 612, height: 792, hasText: false },
+      ],
     })
 
     const ocrImage = vi
@@ -101,9 +104,9 @@ describe("convertPdfToSearchable", () => {
     mockedGetPdfInfo.mockResolvedValue({
       pageCount: 3,
       pages: [
-        { width: 612, height: 792 },
-        { width: 612, height: 792 },
-        { width: 612, height: 792 },
+        { width: 612, height: 792, hasText: false },
+        { width: 612, height: 792, hasText: false },
+        { width: 612, height: 792, hasText: false },
       ],
     })
 
@@ -131,7 +134,7 @@ describe("convertPdfToSearchable", () => {
   it("terminates worker session when OCR throws", async () => {
     mockedGetPdfInfo.mockResolvedValue({
       pageCount: 1,
-      pages: [{ width: 612, height: 792 }],
+      pages: [{ width: 612, height: 792, hasText: false }],
     })
 
     const ocrImage = vi.fn().mockRejectedValue(new Error("ocr failure"))
@@ -149,9 +152,14 @@ describe("convertPdfToSearchable", () => {
   })
 
   it("fails fast when PDF page count exceeds the configured maxPages", async () => {
+    const pages = Array.from({ length: 250 }, () => ({
+      width: 612,
+      height: 792,
+      hasText: false,
+    }))
     mockedGetPdfInfo.mockResolvedValue({
       pageCount: 250,
-      pages: [],
+      pages,
     })
 
     const result = await convertPdfToSearchable(
@@ -180,5 +188,65 @@ describe("convertPdfToSearchable", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("PDF has no pages")
     expect(mockedCreateOcrSession).not.toHaveBeenCalled()
+  })
+
+  it("skips OCR on pages that already contain selectable text", async () => {
+    mockedGetPdfInfo.mockResolvedValue({
+      pageCount: 3,
+      pages: [
+        { width: 612, height: 792, hasText: true },
+        { width: 612, height: 792, hasText: false },
+        { width: 612, height: 792, hasText: true },
+      ],
+    })
+
+    const ocrImage = vi.fn().mockResolvedValue({
+      pageNumber: 2,
+      width: 100,
+      height: 100,
+      words: [],
+      fullText: "ocr-page-2",
+    })
+    const terminate = vi.fn().mockResolvedValue(undefined)
+    mockedCreateOcrSession.mockResolvedValue({ ocrImage, terminate })
+    mockedBuildSearchablePdf.mockResolvedValue(Buffer.from("output"))
+
+    const result = await convertPdfToSearchable(
+      Buffer.from("%PDF-1.7"),
+      createAsyncPageSource(3)
+    )
+
+    expect(result.success).toBe(true)
+    expect(ocrImage).toHaveBeenCalledTimes(1)
+    expect(ocrImage).toHaveBeenCalledWith(expect.any(Buffer), 2)
+    expect(mockedBuildSearchablePdf).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      [expect.objectContaining({ pageNumber: 2 })],
+      true
+    )
+  })
+
+  it("does not initialize OCR worker when all pages already contain text", async () => {
+    mockedGetPdfInfo.mockResolvedValue({
+      pageCount: 2,
+      pages: [
+        { width: 612, height: 792, hasText: true },
+        { width: 612, height: 792, hasText: true },
+      ],
+    })
+    mockedBuildSearchablePdf.mockResolvedValue(Buffer.from("output"))
+
+    const result = await convertPdfToSearchable(
+      Buffer.from("%PDF-1.7"),
+      createAsyncPageSource(2)
+    )
+
+    expect(result.success).toBe(true)
+    expect(mockedCreateOcrSession).not.toHaveBeenCalled()
+    expect(mockedBuildSearchablePdf).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      [],
+      true
+    )
   })
 })
