@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -9,6 +9,33 @@ import { FileText, Upload, CheckCircle, AlertCircle, Download, Loader2 } from "l
 type UploadState = "idle" | "uploading" | "processing" | "ready" | "downloaded" | "error"
 
 const FETCH_TIMEOUT_MS = 300000 // 5 minutes for OCR processing
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+
+function isPdfFile(candidate: File): boolean {
+  return candidate.type === "application/pdf" || candidate.name.toLowerCase().endsWith(".pdf")
+}
+
+function getFileValidationError(candidate: File): string | null {
+  if (!isPdfFile(candidate)) {
+    return "Please upload a PDF file"
+  }
+  if (candidate.size > MAX_UPLOAD_BYTES) {
+    return "File is too large. Maximum size is 50 MB."
+  }
+  return null
+}
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return error.name === "AbortError"
+  }
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "AbortError"
+  )
+}
 
 export function PdfUploader() {
   const [file, setFile] = useState<File | null>(null)
@@ -20,6 +47,22 @@ export function PdfUploader() {
   const [convertedFilename, setConvertedFilename] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+      abortControllerRef.current = null
+    }
+  }, [])
+
+  const setSelectedFile = useCallback((selectedFile: File) => {
+    setFile(selectedFile)
+    setError(null)
+    setState("idle")
+    setProgress(0)
+    setConvertedBlob(null)
+    setConvertedFilename(null)
+  }, [])
 
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -37,21 +80,29 @@ export function PdfUploader() {
     setDragActive(false)
     
     const droppedFile = e.dataTransfer.files?.[0]
-    if (droppedFile?.type === "application/pdf") {
-      setFile(droppedFile)
-      setError(null)
-    } else {
-      setError("Please drop a PDF file")
+    if (!droppedFile) return
+
+    const validationError = getFileValidationError(droppedFile)
+    if (validationError) {
+      setError(validationError)
+      return
     }
-  }, [])
+
+    setSelectedFile(droppedFile)
+  }, [setSelectedFile])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      setFile(selectedFile)
-      setError(null)
+    if (!selectedFile) return
+
+    const validationError = getFileValidationError(selectedFile)
+    if (validationError) {
+      setError(validationError)
+      return
     }
-  }, [])
+
+    setSelectedFile(selectedFile)
+  }, [setSelectedFile])
 
   const handleZoneClick = () => {
     inputRef.current?.click()
@@ -101,6 +152,8 @@ export function PdfUploader() {
     setError(null)
 
     let progressInterval: ReturnType<typeof setInterval> | null = null
+    let requestTimeout: ReturnType<typeof setTimeout> | null = null
+    let didTimeout = false
 
     try {
       const formData = new FormData()
@@ -114,27 +167,16 @@ export function PdfUploader() {
         setProgress((prev) => Math.min(prev + 2, 85))
       }, 2000)
 
-      // Create timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error("Request timed out. The PDF may be too large or complex."))
-        }, FETCH_TIMEOUT_MS)
+      requestTimeout = setTimeout(() => {
+        didTimeout = true
+        abortControllerRef.current?.abort()
+      }, FETCH_TIMEOUT_MS)
+
+      const response = await fetch("/api/convert", {
+        method: "POST",
+        body: formData,
+        signal,
       })
-
-      // Race fetch against timeout
-      const response = await Promise.race([
-        fetch("/api/convert", {
-          method: "POST",
-          body: formData,
-          signal,
-        }),
-        timeoutPromise,
-      ])
-
-      if (progressInterval) {
-        clearInterval(progressInterval)
-        progressInterval = null
-      }
 
       if (!response.ok) {
         // Try to parse error response
@@ -186,19 +228,27 @@ export function PdfUploader() {
       setProgress(100)
       setState("ready")
     } catch (err) {
-      if (progressInterval) {
-        clearInterval(progressInterval)
-      }
-      
-      // Don't show error for user-initiated abort
-      if (err instanceof Error && err.name === "AbortError") {
-        setState("idle")
-        setProgress(0)
+      if (isAbortError(err)) {
+        if (didTimeout) {
+          setError("Request timed out. The PDF may be too large or complex.")
+          setState("error")
+        } else {
+          setState("idle")
+          setProgress(0)
+        }
         return
       }
       
       setError(err instanceof Error ? err.message : "Conversion failed")
       setState("error")
+    } finally {
+      if (progressInterval) {
+        clearInterval(progressInterval)
+      }
+      if (requestTimeout) {
+        clearTimeout(requestTimeout)
+      }
+      abortControllerRef.current = null
     }
   }
 

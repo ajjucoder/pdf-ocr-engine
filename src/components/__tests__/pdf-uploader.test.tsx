@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { PdfUploader } from "../pdf-uploader"
-
-// Constants for timing tests - should match the component
-const DOWNLOAD_CLEANUP_DELAY_MS = 60000
 
 // Mock URL methods
 const mockCreateObjectURL = vi.fn(() => "blob:test-url")
@@ -22,6 +19,7 @@ describe("PdfUploader", () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -58,6 +56,78 @@ describe("PdfUploader", () => {
     await user.upload(input, file)
     
     expect(screen.getByText("Convert to Searchable PDF")).toBeInTheDocument()
+  })
+
+  it("rejects non-PDF files on selection", () => {
+    render(<PdfUploader />)
+
+    const txtFile = new File(["hello"], "notes.txt", { type: "text/plain" })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+
+    fireEvent.change(input, { target: { files: [txtFile] } })
+
+    expect(screen.getByText("Please upload a PDF file")).toBeInTheDocument()
+    expect(screen.queryByText("Convert to Searchable PDF")).not.toBeInTheDocument()
+  })
+
+  it("rejects oversized PDF files", async () => {
+    const user = userEvent.setup()
+    render(<PdfUploader />)
+
+    const largePdf = new File(["x"], "large.pdf", { type: "application/pdf" })
+    Object.defineProperty(largePdf, "size", { value: 51 * 1024 * 1024 })
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await user.upload(input, largePdf)
+
+    expect(screen.getByText("File is too large. Maximum size is 50 MB.")).toBeInTheDocument()
+    expect(screen.queryByText("Convert to Searchable PDF")).not.toBeInTheDocument()
+  })
+
+  it("shows a timeout error when conversion exceeds the request limit", async () => {
+    const originalSetTimeout = global.setTimeout
+    vi.spyOn(global, "setTimeout").mockImplementation(
+      ((handler: TimerHandler, timeout?: number, ...args: unknown[]) => {
+        if (timeout === 300000) {
+          Promise.resolve().then(() => {
+            if (typeof handler === "function") {
+              handler(...args)
+            }
+          })
+          return 0 as unknown as ReturnType<typeof setTimeout>
+        }
+        return originalSetTimeout(handler, timeout, ...args)
+      }) as typeof setTimeout
+    )
+
+    render(<PdfUploader />)
+
+    const file = createMockPdfFile()
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [file] } })
+
+    mockFetch.mockImplementation((_url, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined
+      return new Promise((_resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException("Aborted", "AbortError"))
+          return
+        }
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true }
+        )
+      })
+    })
+
+    fireEvent.click(screen.getByText("Convert to Searchable PDF"))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("Request timed out. The PDF may be too large or complex.")
+      ).toBeInTheDocument()
+    })
   })
 
   it("shows 'Click to download' button after conversion completes", async () => {
