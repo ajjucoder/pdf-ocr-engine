@@ -3,6 +3,16 @@ import { convertPdfToSearchable } from "@/lib/ocr"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
+const MAX_PDF_BYTES = 50 * 1024 * 1024
+
+function hasPdfHeader(buffer: Buffer): boolean {
+  if (buffer.length < 5) return false
+  return buffer.subarray(0, 5).toString("ascii") === "%PDF-"
+}
+
+function isValidOcrLanguage(language: string): boolean {
+  return /^[a-z]{3}(?:\+[a-z]{3})*$/i.test(language)
+}
 
 export async function POST(request: NextRequest) {
   console.time("[TOTAL] PDF conversion")
@@ -19,9 +29,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
       return NextResponse.json(
         { error: "File must be a PDF" },
+        { status: 400 }
+      )
+    }
+
+    if (file.size > MAX_PDF_BYTES) {
+      return NextResponse.json(
+        { error: "PDF is too large. Maximum size is 50 MB." },
+        { status: 413 }
+      )
+    }
+
+    if (!isValidOcrLanguage(language)) {
+      return NextResponse.json(
+        { error: "Invalid OCR language format" },
         { status: 400 }
       )
     }
@@ -31,38 +55,26 @@ export async function POST(request: NextRequest) {
     console.time("[STEP 1] Read PDF buffer")
     const pdfBuffer = Buffer.from(await file.arrayBuffer())
     console.timeEnd("[STEP 1] Read PDF buffer")
+
+    if (!hasPdfHeader(pdfBuffer)) {
+      return NextResponse.json(
+        { error: "Uploaded file is not a valid PDF" },
+        { status: 400 }
+      )
+    }
     
     // Convert PDF pages to images using pdf-to-img
     // Dynamic import to avoid build-time initialization issues
     // OPTIMIZED: Reduced scale from 2.0 to 1.5 for faster processing
-    console.time("[STEP 2] PDF to images")
+    console.time("[STEP 2/3] OCR + PDF build")
     const { pdf } = await import("pdf-to-img")
-    const imageBuffers: Buffer[] = []
     const pdfDocument = await pdf(pdfBuffer, { scale: 1.5 })
-    
-    let pageNum = 0
-    for await (const page of pdfDocument) {
-      pageNum++
-      console.log(`[STEP 2] Extracted page ${pageNum} (${(page.length / 1024).toFixed(1)} KB)`)
-      imageBuffers.push(page)
-    }
-    console.timeEnd("[STEP 2] PDF to images")
-    console.log(`[STEP 2] Total pages extracted: ${imageBuffers.length}`)
-    
-    if (imageBuffers.length === 0) {
-      return NextResponse.json(
-        { error: "Could not extract pages from PDF" },
-        { status: 500 }
-      )
-    }
-
-    console.time("[STEP 3] OCR + PDF build")
     const conversionResult = await convertPdfToSearchable(
       pdfBuffer,
-      imageBuffers,
+      pdfDocument,
       { language, preserveImages: true }
     )
-    console.timeEnd("[STEP 3] OCR + PDF build")
+    console.timeEnd("[STEP 2/3] OCR + PDF build")
 
     if (!conversionResult.success || !conversionResult.outputBuffer) {
       console.timeEnd("[TOTAL] PDF conversion")

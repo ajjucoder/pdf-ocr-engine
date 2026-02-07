@@ -6,6 +6,10 @@ export async function buildSearchablePdf(
   pageResults: PageResult[],
   preserveImages: boolean = true
 ): Promise<Buffer> {
+  if (!preserveImages) {
+    return createTextOnlyPdf(pageResults)
+  }
+
   const originalPdf = await PDFDocument.load(originalPdfBuffer)
   const newPdf = await PDFDocument.create()
   const font = await newPdf.embedFont(StandardFonts.Helvetica)

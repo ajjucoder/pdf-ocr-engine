@@ -1,4 +1,6 @@
 import { PDFDocument } from "pdf-lib"
+import { pdf } from "pdf-to-img"
+import sharp from "sharp"
 
 export interface ExtractedPage {
   pageNumber: number
@@ -11,23 +13,23 @@ export async function extractPagesAsImages(
   pdfBuffer: Buffer,
   dpi: number = 300
 ): Promise<ExtractedPage[]> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer)
-  const pageCount = pdfDoc.getPageCount()
+  const scale = Math.max(dpi / 72, 1)
   const pages: ExtractedPage[] = []
+  const pdfDocument = await pdf(pdfBuffer, { scale })
 
-  // For PDFs with embedded images, we need to extract them
-  // This is a simplified approach - for production, use pdf2pic or similar
-  for (let i = 0; i < pageCount; i++) {
-    const page = pdfDoc.getPage(i)
-    const { width, height } = page.getSize()
-    
-    // Create a placeholder - in production, use pdf-to-img or poppler
-    // For now, we will handle this in the API route with a different approach
+  let pageNumber = 0
+  for await (const pageImage of pdfDocument) {
+    pageNumber++
+    const imageBuffer = Buffer.isBuffer(pageImage)
+      ? pageImage
+      : Buffer.from(pageImage)
+    const metadata = await sharp(imageBuffer).metadata()
+
     pages.push({
-      pageNumber: i + 1,
-      imageBuffer: Buffer.alloc(0), // Will be populated by pdf2pic in API
-      width: Math.round(width * dpi / 72),
-      height: Math.round(height * dpi / 72),
+      pageNumber,
+      imageBuffer,
+      width: metadata.width ?? 1,
+      height: metadata.height ?? 1,
     })
   }
 
