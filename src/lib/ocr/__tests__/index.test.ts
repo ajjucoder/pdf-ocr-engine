@@ -147,4 +147,38 @@ describe("convertPdfToSearchable", () => {
     expect(result.error).toContain("ocr failure")
     expect(terminate).toHaveBeenCalledTimes(1)
   })
+
+  it("fails fast when PDF page count exceeds the configured maxPages", async () => {
+    mockedGetPdfInfo.mockResolvedValue({
+      pageCount: 250,
+      pages: [],
+    })
+
+    const result = await convertPdfToSearchable(
+      Buffer.from("%PDF-1.7"),
+      createAsyncPageSource(1),
+      { maxPages: 200 }
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("exceeds the maximum allowed 200 pages")
+    expect(mockedCreateOcrSession).not.toHaveBeenCalled()
+    expect(mockedBuildSearchablePdf).not.toHaveBeenCalled()
+  })
+
+  it("fails fast when PDF has zero pages", async () => {
+    mockedGetPdfInfo.mockResolvedValue({
+      pageCount: 0,
+      pages: [],
+    })
+
+    const result = await convertPdfToSearchable(
+      Buffer.from("%PDF-1.7"),
+      createAsyncPageSource(0)
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("PDF has no pages")
+    expect(mockedCreateOcrSession).not.toHaveBeenCalled()
+  })
 })

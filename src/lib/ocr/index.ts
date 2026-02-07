@@ -30,7 +30,7 @@ export async function convertPdfToSearchable(
   options: OcrOptions = {},
   onProgress?: (progress: ConversionProgress) => void
 ): Promise<ConversionResult> {
-  const { language = "eng", preserveImages = true } = options
+  const { language = "eng", preserveImages = true, maxPages } = options
   const pageResults: PageResult[] = []
   let totalPages = 0
   let session: Awaited<ReturnType<typeof createOcrSession>> | null = null
@@ -42,6 +42,14 @@ export async function convertPdfToSearchable(
     
     const pdfInfo = await getPdfInfo(pdfBuffer)
     totalPages = pdfInfo.pageCount
+    if (totalPages === 0) {
+      throw new Error("PDF has no pages")
+    }
+    if (maxPages && totalPages > maxPages) {
+      throw new Error(
+        `PDF has ${totalPages} pages, which exceeds the maximum allowed ${maxPages} pages`
+      )
+    }
 
     console.log(`[OCR] Processing ${totalPages} pages`)
 

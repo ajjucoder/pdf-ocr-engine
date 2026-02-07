@@ -4,6 +4,7 @@ import { convertPdfToSearchable } from "@/lib/ocr"
 export const runtime = "nodejs"
 export const maxDuration = 300
 const MAX_PDF_BYTES = 50 * 1024 * 1024
+const MAX_PDF_PAGES = 200
 
 function hasPdfHeader(buffer: Buffer): boolean {
   if (buffer.length < 5) return false
@@ -72,20 +73,24 @@ export async function POST(request: NextRequest) {
     const conversionResult = await convertPdfToSearchable(
       pdfBuffer,
       pdfDocument,
-      { language, preserveImages: true }
+      { language, preserveImages: true, maxPages: MAX_PDF_PAGES }
     )
     console.timeEnd("[STEP 2/3] OCR + PDF build")
 
     if (!conversionResult.success || !conversionResult.outputBuffer) {
-      console.timeEnd("[TOTAL] PDF conversion")
+      const errorMessage = conversionResult.error || "Conversion failed"
+      const status =
+        errorMessage.includes("exceeds the maximum allowed") ? 413 :
+        errorMessage.includes("has no pages") ? 400 :
+        500
+
       return NextResponse.json(
-        { error: conversionResult.error || "Conversion failed" },
-        { status: 500 }
+        { error: errorMessage },
+        { status }
       )
     }
 
     console.log(`[COMPLETE] Output size: ${(conversionResult.outputBuffer.length / 1024).toFixed(1)} KB`)
-    console.timeEnd("[TOTAL] PDF conversion")
 
     const uint8Array = new Uint8Array(conversionResult.outputBuffer)
     
@@ -97,11 +102,12 @@ export async function POST(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.timeEnd("[TOTAL] PDF conversion")
     console.error("Conversion error:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 }
     )
+  } finally {
+    console.timeEnd("[TOTAL] PDF conversion")
   }
 }

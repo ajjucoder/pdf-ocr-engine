@@ -2,6 +2,7 @@ export interface OcrOptions {
   language?: string
   dpi?: number
   preserveImages?: boolean
+  maxPages?: number
 }
 
 export interface OcrResult {
